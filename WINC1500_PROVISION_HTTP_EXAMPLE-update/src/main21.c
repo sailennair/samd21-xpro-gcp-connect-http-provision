@@ -276,6 +276,7 @@ void client_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg){
 			tstrSocketRecvMsg *pstrRecv = (tstrSocketRecvMsg *)pvMsg;
 			if (pstrRecv && pstrRecv->s16BufferSize > 0) {
 				printf("socket_cb: recv success!\r\n");
+				printf("%s\r\n", pstrRecv->pu8Buffer);
 				} else {
 				printf("socket_cb: recv error!\r\n");
 				close(tcp_client_socket_external);
@@ -407,8 +408,6 @@ void handle_input_message(void)
 				//printf("Splitting string into individual elements\r\n");
 				pch = strtok(uart_buffer, " ");
 				
-				
-				
 				while (pch != NULL){
 					printf("%s\n", pch);
 					
@@ -435,7 +434,7 @@ void handle_input_message(void)
 					if (!strncmp("SEND", CommandArray[1], sendSize))
 					{
 						sendTCP(CommandArray[2]);
-						printf("Sent %s to the server\r\n", CommandArray[2]);
+						printf("Sent '%s' to the server\r\n", CommandArray[2]);
 					}
 				}
 				
@@ -514,8 +513,6 @@ long long int calculateIP(char *IPstring){
 	
 	IPnumber = (IPNum[3]*1) + (IPNum[2]*256) + (IPNum[1]*65536) + 3221225472;
 	return IPnumber;
-	
-	
 }
 
 /**
@@ -547,7 +544,6 @@ static void at25dfx_init(void)
 	at25dfx_chip_config.cs_pin = AT25DFX_CS;
 
 	at25dfx_chip_init(&at25dfx_chip, &at25dfx_spi, &at25dfx_chip_config);
-
 }
 
 
@@ -650,7 +646,7 @@ int main(void)
 	registerSocketCallback(socket_cb, NULL);
 	
 	printf("\r\n");
-	printf("To connect to a TCP server enter command 'TCP CONNECT {IP ADDRESS} PORT'\r\n");
+	printf("To connect to a TCP server enter command 'TCP CONNECT {IP ADDRESS} {PORT NUMBER}'\r\n");
 	printf("To send a command to the TCP server use command 'TCP SEND {COMMAND}'\r\n");
 	printf("\r\n");
 
@@ -674,6 +670,7 @@ int main(void)
 		}
 		
 		//When button is pressed, reset the system and erase the Serial flash.
+		//Thus the board will start to provision again
 		if (port_pin_get_input_level(BUTTON_0_PIN) != BUTTON_0_INACTIVE){
 			port_pin_set_output_level(LED0_PIN, LED_0_ACTIVE);
 			delay_s(1);
