@@ -55,6 +55,10 @@ void sendTCP(char* message);
 
 int commandTCP(char* IPAddress, int port);
 
+void closeTCP(void);
+
+void handle_server_messages(char* message);
+
 long long int calculateIP(char *IPstring);
 
 #define AT25DFX_BUFFER_SIZE  (100)
@@ -72,6 +76,8 @@ char *SSID_read[AT25DFX_BUFFER_SIZE];
 char *SSID_read2[AT25DFX_BUFFER_SIZE];
 
 char *Password_read[AT25DFX_BUFFER_SIZE];
+
+char connectMessage[64] = "Welcome to SAMD21 Xplained Pro\r\n";
 
 struct spi_module at25dfx_spi;
 
@@ -185,6 +191,9 @@ static void server_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 				accept(tcp_server_socket, NULL, NULL);
 				tcp_client_socket = pstrAccept->sock;
 				tcp_connected = 1;
+				
+				send(tcp_client_socket, connectMessage, strlen(connectMessage),0);
+				
 				recv(tcp_client_socket, gau8SocketTestBuffer, sizeof(gau8SocketTestBuffer), 0);
 				} else {
 				printf("socket_cb: accept error!\r\n");
@@ -201,6 +210,7 @@ static void server_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 				printf("socket_cb: connect success.\r\n");
 				tcp_connected = 1;
 				recv(tcp_client_socket, gau8SocketBuffer, sizeof(gau8SocketBuffer), 0);
+				
 				
 				} else {
 				printf("socket_cb: connect error!\r\n");
@@ -225,7 +235,16 @@ static void server_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 				printf("socket_cb: recv success!\r\n");
 				printf("The message received is %s\r\n", pstrRecv->pu8Buffer);
 				
-				send(tcp_client_socket, &msg_wifi_product, sizeof(t_msg_wifi_product), 0);
+				handle_server_messages(pstrRecv->pu8Buffer);
+				
+				//send(tcp_client_socket, &msg_wifi_product, sizeof(t_msg_wifi_product), 0);
+				
+				memset(pstrRecv->pu8Buffer, 0, sizeof(pstrRecv->pu8Buffer));
+				memset(gau8SocketBuffer, 0, sizeof(gau8SocketBuffer));
+								
+				//Clear the message buffer. 
+				//memcpy(pstrRecv->pu8Buffer, NULL, sizeof(pstrRecv->pu8Buffer));
+			
 				
 				}else {
 				printf("socket_cb: recv error!\r\n");
@@ -265,6 +284,7 @@ void client_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg){
 		case SOCKET_MSG_SEND:
 		{
 			printf("socket_cb: send success!\r\n");
+			memset(gau8SocketTestBuffer, 0, sizeof(gau8SocketTestBuffer));
 			recv(tcp_client_socket_external, gau8SocketTestBuffer, sizeof(gau8SocketTestBuffer), 0);
 		}
 		break;
@@ -272,11 +292,15 @@ void client_socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg){
 		/* Message receive */
 		case SOCKET_MSG_RECV:
 		{
-			
 			tstrSocketRecvMsg *pstrRecv = (tstrSocketRecvMsg *)pvMsg;
 			if (pstrRecv && pstrRecv->s16BufferSize > 0) {
 				printf("socket_cb: recv success!\r\n");
 				printf("%s\r\n", pstrRecv->pu8Buffer);
+				if(tcp_server_socket>=0 && tcp_client_socket >0){
+					send(tcp_client_socket, pstrRecv->pu8Buffer, strlen(pstrRecv->pu8Buffer),0);
+				}
+				
+				memset(pstrRecv->pu8Buffer, 0, sizeof(pstrRecv->pu8Buffer));
 				} else {
 				printf("socket_cb: recv error!\r\n");
 				close(tcp_client_socket_external);
@@ -343,7 +367,6 @@ static void wifi_callback(uint8 msg_type, void *msg_data)
 				Password = pstrProvInfo->au8Password;
 				printf("SSID %s\r\n", SSID);
 				
-				
 				at25dfx_chip_set_sector_protect(&at25dfx_chip, 0x10000, false);
 				at25dfx_chip_set_sector_protect(&at25dfx_chip, 0x20000, false);
 				
@@ -377,6 +400,48 @@ static void wifi_callback(uint8 msg_type, void *msg_data)
 	}
 }
 
+void handle_server_messages(char* message){
+	char* pch;
+	int count = 0;
+	int arrCount = 0;
+	//printf("Splitting string into individual elements\r\n");
+	pch = strtok(message, " ");
+	
+	while (pch != NULL){
+		//printf("%s\n", pch);
+		
+		CommandArray[count++] = pch;
+		
+		pch = strtok(NULL, " ");
+		
+	}
+	
+	size_t commandSize = 3;
+	size_t connectSize = 7;
+	size_t sendSize = 4;
+	
+	//printf("Done Splitting\r\n");
+	//printf("The command is %s\r\n", CommandArray[0]);
+	
+	//To connect to a TCP connection,
+	//"TCP CONNECT {IP ADRESS} {PORT}"
+	if(!strncmp("TCP",CommandArray[0],commandSize)){
+		
+		if(!strncmp("CONNECT", CommandArray[1],connectSize)){
+			commandTCP(CommandArray[2], atoi(CommandArray[3]));
+		}
+		if (!strncmp("SEND", CommandArray[1], sendSize))
+		{
+			sendTCP(CommandArray[2]);
+			printf("Sent '%s' to the server\r\n", CommandArray[2]);
+		}
+		if (!strncmp("CLOSE", CommandArray[1], strlen("CLOSE"))){
+			closeTCP();
+			printf("Closing the connection to the server\r\n");
+		}
+	}
+}
+
 void handle_input_message(void)
 {
 	int i, msg_len;
@@ -385,7 +450,7 @@ void handle_input_message(void)
 		return;
 		} else if (uart_buffer_written >= MAIN_CHAT_BUFFER_SIZE) {
 		
-		send(tcp_client_socket, uart_buffer, MAIN_CHAT_BUFFER_SIZE, 0);
+		//send(tcp_client_socket, uart_buffer, MAIN_CHAT_BUFFER_SIZE, 0);
 		uart_buffer_written = 0;
 		} else {
 		for (i = 0; i < uart_buffer_written; i++) {
@@ -399,7 +464,7 @@ void handle_input_message(void)
 				}
 
 				uart_buffer[msg_len] = 0;
-				printf("The input message is %s\r\n",uart_buffer);
+				//printf("The input message is %s\r\n",uart_buffer);
 				
 				char* pch;
 				
@@ -409,7 +474,7 @@ void handle_input_message(void)
 				pch = strtok(uart_buffer, " ");
 				
 				while (pch != NULL){
-					printf("%s\n", pch);
+					//printf("%s\n", pch);
 					
 					CommandArray[count++] = pch;
 					
@@ -435,6 +500,10 @@ void handle_input_message(void)
 					{
 						sendTCP(CommandArray[2]);
 						printf("Sent '%s' to the server\r\n", CommandArray[2]);
+					}
+					if (!strncmp("CLOSE", CommandArray[1], strlen("CLOSE"))){
+						closeTCP();
+						printf("Closing the connection to the server\r\n");
 					}
 				}
 				
@@ -466,7 +535,7 @@ int commandTCP(char* IPAddress, int port){
 	
 	if ((tcp_client_socket_external < 0) && (wifi_connected ==1)){
 		if ((tcp_client_socket_external = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-			printf("main: failed to create TCP client socket4 error!\r\n");
+			printf("main: failed to create TCP client socket error!\r\n");
 			return;
 		}
 
@@ -481,9 +550,18 @@ int commandTCP(char* IPAddress, int port){
 	}
 }
 
+void closeTCP(void){
+	if(tcp_client_socket_external > 0){
+		close(tcp_client_socket_external);
+		tcp_client_socket_external = -1;
+	}
+	
+}
+
 void sendTCP(char* message){
 	printf("message to the server is: %s\r\n", message);
 	send(tcp_client_socket_external, message, strlen(message), 0);
+	
 }
 
 long long int calculateIP(char *IPstring){
@@ -538,7 +616,6 @@ static void at25dfx_init(void)
 
 	spi_init(&at25dfx_spi, AT25DFX_SPI, &at25dfx_spi_config);
 	spi_enable(&at25dfx_spi);
-	
 
 	at25dfx_chip_config.type = AT25DFX_MEM_TYPE;
 	at25dfx_chip_config.cs_pin = AT25DFX_CS;

@@ -25,7 +25,7 @@ extern "C" {
 
 	#define MAIN_CHAT_BUFFER_SIZE       1460
 
-	#define MAIN_WIFI_M2M_PRODUCT_NAME        "ACK-WINC"
+	#define MAIN_WIFI_M2M_PRODUCT_NAME        "ACK-WINC\r\n"
 
 	#define MAIN_WIFI_M2M_SERVER_IP           0xFFFFFFFF /* 255.255.255.255 */
 
