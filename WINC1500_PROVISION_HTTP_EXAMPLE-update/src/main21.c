@@ -77,7 +77,12 @@ char *SSID_read2[AT25DFX_BUFFER_SIZE];
 
 char *Password_read[AT25DFX_BUFFER_SIZE];
 
-char connectMessage[64] = "Welcome to SAMD21 Xplained Pro\r\n";
+char connectMessage[280] = "Welcome to SAMD21 Xplained Pro\r\n"
+"----Commands to use----\r\n"
+"TCP CONNECT {IP} {Port} - Open a TCP client to IP address\r\n"
+"TCP SEND {Parameters} - Send parameters to TCP Server\r\n"
+"TCP CLOSE - Close the current connection to the TCP server\r\n"
+"----End Commands----\r\n";
 
 struct spi_module at25dfx_spi;
 
